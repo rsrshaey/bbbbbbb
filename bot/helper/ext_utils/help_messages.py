@@ -419,7 +419,6 @@ f'''⌬ <b><i>Miscellaneous Commands!</i></b>
 ┖ /{BotCommands.MyDramaListCommand}: Search in MyDramaList.
 ''']
 
-
 PASSWORD_ERROR_MESSAGE = """
 <b>This link requires a password!</b>
 - Insert sign <b>::</b> after the link and write the password after the sign.

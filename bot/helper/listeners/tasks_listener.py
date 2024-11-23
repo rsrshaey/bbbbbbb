@@ -17,9 +17,9 @@ from bot import OWNER_ID, Interval, aria2, DOWNLOAD_DIR, download_dict, download
     MAX_SPLIT_SIZE, config_dict, status_reply_dict_lock, user_data, non_queued_up, non_queued_dl, queued_up, \
     queued_dl, queue_dict_lock, bot, GLOBAL_EXTENSION_FILTER
 from bot.helper.ext_utils.bot_utils import extra_btns, sync_to_async, get_readable_file_size, get_readable_time, is_mega_link, is_gdrive_link
-from bot.helper.ext_utils.fs_utils import get_base_name, get_path_size, clean_download, clean_target, \
-    is_first_archive_split, is_archive, is_archive_split, join_files
-from bot.helper.ext_utils.leech_utils import split_file, format_filename
+from bot.helper.ext_utils.fs_utils import Watermark, get_base_name, get_path_size, clean_download, clean_target, \
+    is_first_archive_split, is_archive, is_archive_split, join_files, edit_metadata, add_attachment
+from bot.helper.ext_utils.leech_utils import split_file, format_filename, get_document_type
 from bot.helper.ext_utils.exceptions import NotSupportedExtractionArchive
 from bot.helper.ext_utils.task_manager import start_from_queued
 from bot.helper.mirror_utils.status_utils.extract_status import ExtractStatus
@@ -28,7 +28,9 @@ from bot.helper.mirror_utils.status_utils.split_status import SplitStatus
 from bot.helper.mirror_utils.status_utils.gdrive_status import GdriveStatus
 from bot.helper.mirror_utils.status_utils.telegram_status import TelegramStatus
 from bot.helper.mirror_utils.status_utils.ddl_status import DDLStatus
+from bot.helper.mirror_utils.status_utils.metadata_status import MetadataStatus
 from bot.helper.mirror_utils.status_utils.rclone_status import RcloneStatus
+from bot.helper.mirror_utils.status_utils.watermark_status import WatermarkStatus
 from bot.helper.mirror_utils.status_utils.queue_status import QueueStatus
 from bot.helper.mirror_utils.upload_utils.gdriveTools import GoogleDriveHelper
 from bot.helper.mirror_utils.upload_utils.pyrogramEngine import TgUploader
@@ -274,6 +276,69 @@ class MirrorLeechListener:
                 self.newDir = ""
                 up_path = dl_path
 
+        wm_position, wm_size = self.user_dict.get('wmposition'), self.user_dict.get('wmsize')
+        if config_dict['ENBALE_WATERMARK'] and await aiopath.exists(f'wm/{self.user_id}.png') and wm_position and wm_size:
+            wm_path = up_path or dl_path
+            wm = Watermark(self)
+            async with download_dict_lock:
+                download_dict[self.uid] = WatermarkStatus(self, wm, gid)
+            if await aiopath.isfile(wm_path) and (await get_document_type(wm_path))[0]:
+                up_path = await wm.add_watermark(wm_path, wm_position, wm_size)
+                if self.suproc == 'cancelled':
+                    return
+            elif await aiopath.isdir(wm_path):
+                for dirpath, _, files in await sync_to_async(walk, wm_path):
+                    for file in files:
+                        if self.suproc == 'cancelled':
+                            return
+                        video_file = ospath.join(dirpath, file)
+                        if (await get_document_type(video_file))[0]:
+                            await wm.add_watermark(video_file, wm_position, wm_size)
+
+        if metadata := self.user_dict.get('lmeta') or config_dict['METADATA']:
+            meta_path = up_path or dl_path
+            self.newDir = f'{self.dir}10000'
+            await makedirs(self.newDir, exist_ok=True)
+            async with download_dict_lock:
+                download_dict[self.uid] = MetadataStatus(name, size, gid, self)
+            if await aiopath.isfile(meta_path) and (await get_document_type(meta_path))[0]:
+                base_dir, file_name = ospath.split(meta_path)
+                outfile = ospath.join(self.newDir, file_name)
+                await edit_metadata(self, base_dir, meta_path, outfile, metadata)
+                if self.suproc == 'cancelled':
+                    return
+            elif await aiopath.isdir(meta_path):
+                for dirpath, _, files in await sync_to_async(walk, meta_path):
+                    for file in files:
+                        if self.suproc == 'cancelled':
+                            return
+                        video_file = ospath.join(dirpath, file)
+                        if (await get_document_type(video_file))[0]:
+                            outfile = ospath.join(self.newDir, file)
+                            await edit_metadata(self, dirpath, video_file, outfile, metadata)
+
+        if attach := self.user_dict.get('lattach') or config_dict['ATTACHMENT_URL']:
+            meta_path = up_path or dl_path
+            self.newDir = f'{self.dir}10000'
+            await makedirs(self.newDir, exist_ok=True)
+            async with download_dict_lock:
+                download_dict[self.uid] = MetadataStatus(name, size, gid, self)
+            if await aiopath.isfile(meta_path) and (await get_document_type(meta_path))[0]:
+                base_dir, file_name = ospath.split(meta_path)
+                outfile = ospath.join(self.newDir, file_name)
+                await add_attachment(self, base_dir, meta_path, outfile, attach)
+                if self.suproc == 'cancelled':
+                    return
+            elif await aiopath.isdir(meta_path):
+                for dirpath, _, files in await sync_to_async(walk, meta_path):
+                    for file in files:
+                        if self.suproc == 'cancelled':
+                            return
+                        video_file = ospath.join(dirpath, file)
+                        if (await get_document_type(video_file))[0]:
+                            outfile = ospath.join(self.newDir, file)
+                            await add_attachment(self, dirpath, video_file, outfile, attach)
+
         if self.compress:
             pswd = self.compress if isinstance(self.compress, str) else ''
             if up_path:
@@ -484,7 +549,7 @@ class MirrorLeechListener:
                             saved = True
                             buttons.ibutton(BotTheme('SAVE_MSG'), 'save', 'footer')
                         await sendMessage(self.message, message + fmsg, buttons.build_menu(2), photo=self.random_pic)
-            
+
             if self.seed:
                 if self.newDir:
                     await clean_target(self.newDir)
@@ -526,10 +591,10 @@ class MirrorLeechListener:
                             if mime_type.startswith(('image', 'video', 'audio')):
                                 share_urls = f'{INDEX_URL}/{url_path}?a=view'
                                 buttons.ubutton(BotTheme('VIEW_LINK'), share_urls)
-                
             else:
                 msg += BotTheme('RCPATH', RCpath=rclonePath)
             msg += BotTheme('M_CC', Tag=self.tag)
+
             message = msg
             
             btns = ButtonMaker()

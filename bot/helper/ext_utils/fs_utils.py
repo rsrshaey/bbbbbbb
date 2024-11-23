@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 from os import walk, path as ospath
 from aiofiles.os import remove as aioremove, path as aiopath, listdir, rmdir, makedirs
-from aioshutil import rmtree as aiormtree
+from aioshutil import rmtree as aiormtree, move
 from shutil import rmtree, disk_usage
+from json import loads as jsonloads
 from magic import Magic
+from asyncio import create_subprocess_exec, gather, sleep
+from asyncio.subprocess import PIPE
 from re import split as re_split, I, search as re_search
+from re import findall
 from subprocess import run as srun
 from sys import exit as sexit
+from time import time
 
 from .exceptions import NotSupportedExtractionArchive
-from bot import aria2, LOGGER, DOWNLOAD_DIR, get_client, GLOBAL_EXTENSION_FILTER
+from bot import bot_cache, aria2, LOGGER, DOWNLOAD_DIR, get_client, GLOBAL_EXTENSION_FILTER
 from bot.helper.ext_utils.bot_utils import sync_to_async, cmd_exec
 
 ARCH_EXT = [".tar.bz2", ".tar.gz", ".bz2", ".gz", ".tar.xz", ".tar", ".tbz2", ".tgz", ".lzma2",
@@ -81,7 +86,7 @@ def exit_clean_up(signal, frame):
         LOGGER.info(
             "Please wait, while we clean up and stop the running downloads")
         clean_all()
-        srun(['pkill', '-9', '-f', 'gunicorn|aria2c|qbittorrent-nox|ffmpeg'])
+        srun(['pkill', '-9', '-f', f'gunicorn|{bot_cache["pkgs"][-1]}'])
         sexit(0)
     except KeyboardInterrupt:
         LOGGER.warning("Force Exiting before the cleanup finishes!")
@@ -175,3 +180,139 @@ async def join_files(path):
             for file_ in files:
                 if re_search(fr"{res}\.0[0-9]+$", file_):
                     await aioremove(f'{path}/{file_}')
+
+async def add_attachment(listener, base_dir: str, media_file: str, outfile: str, attach: str = ''):
+    attachment_ext = attach.split(".")[-1].lower()
+    if attachment_ext in ["jpg", "jpeg"]:
+        mime_type = "image/jpeg"
+    elif attachment_ext == "png":
+        mime_type = "image/png"
+    else:
+        mime_type = "application/octet-stream"
+
+    cmd = [
+        bot_cache['pkgs'][2], '-hide_banner', '-ignore_unknown', '-i', media_file, '-attach', attach, 
+        '-metadata:s:t', f'mimetype={mime_type}', '-c', 'copy', '-map', '0', outfile, '-y'
+    ]
+
+    listener.suproc = await create_subprocess_exec(*cmd, stderr=PIPE)
+    code = await listener.suproc.wait()
+
+    if code == 0:
+        await clean_target(media_file)
+        listener.seed = False
+        await move(outfile, base_dir)
+    else:
+        # Capture the stderr output and decode it properly
+        stderr_output = await listener.suproc.stderr.read()  # Await first
+        LOGGER.error('%s. Adding Attachment failed, Path %s', stderr_output.decode(), media_file)  # Then decode
+        await clean_target(outfile)
+                
+async def edit_metadata(listener, base_dir: str, media_file: str, outfile: str, metadata: str = ''):
+    cmd = [bot_cache['pkgs'][2], '-hide_banner', '-ignore_unknown', '-i', media_file, '-metadata', f'title={metadata}', '-metadata:s:v',
+           f'title={metadata}', '-metadata:s:a', f'title={metadata}', '-metadata:s:s', f'title={metadata}', '-map', '0:v:0?',
+           '-map', '0:a:?', '-map', '0:s:?', '-c:v', 'copy', '-c:a', 'copy', '-c:s', 'copy', outfile, '-y']
+    listener.suproc = await create_subprocess_exec(*cmd, stderr=PIPE)
+    code = await listener.suproc.wait()
+    if code == 0:
+        await clean_target(media_file)
+        listener.seed = False
+        await move(outfile, base_dir)
+    else:
+        await clean_target(outfile)
+        LOGGER.error('%s. Changing metadata failed, Path %s', (await listener.suproc.stderr.read()).decode(), media_file)
+                
+async def get_media_info(path: str):
+    try:
+        result = await cmd_exec(['ffprobe', '-hide_banner', '-loglevel', 'error', '-print_format', 'json', '-show_format', path])
+        if res := result[1]:
+            LOGGER.warning('Get Media Info: %s', res)
+    except Exception as e:
+        LOGGER.error('Get Media Info: %s. Mostly File not found!', e)
+        return 0, None, None
+    if result[0] and result[2] == 0:
+        fields = jsonloads(result[0]).get('format')
+        if fields is None:
+            LOGGER.error('Get_media_info: %s', result)
+            return 0, None, None
+        duration = round(float(fields.get('duration', 0)))
+        tags = fields.get('tags', {})
+        artist = tags.get('artist') or tags.get('ARTIST') or tags.get('Artist')
+        title = tags.get('title') or tags.get('TITLE') or tags.get('Title')
+        return duration, artist, title
+    return 0, None, None
+
+class FFProgress:
+    def __init__(self):
+        self.outfile = ''
+        self._duration = 0
+        self._start_time = time()
+        self._eta = 0
+        self._percentage = '0%'
+        self._processed_bytes = 0
+    @property
+    def processed_bytes(self):
+        return self._processed_bytes
+    @property
+    def percentage(self):
+        return self._percentage
+    @property
+    def eta(self):
+        return self._eta
+    @property
+    def speed(self):
+        return self._processed_bytes / (time() - self._start_time)
+    @staticmethod
+    async def read_lines(stream):
+        data = bytearray()
+        while not stream.at_eof():
+            lines = re_split(br'[\r\n]+', data)
+            data[:] = lines.pop(-1)
+            for line in lines:
+                yield line
+            data.extend(await stream.read(1024))
+    async def progress(self, status: str=''):
+        start_time = time()
+        async for line in self.read_lines(self.listener.suproc.stderr):
+            if self.listener.suproc.returncode is not None:
+                return
+            if progress := dict(findall(r'(frame|fps|size|time|bitrate|speed)\s*\=\s*(\S+)', line.decode('utf-8').strip())):
+                if not self._duration:
+                    self._duration = (await get_media_info(self.path))[0]
+                hh, mm, sms = progress['time'].split(':')
+                time_to_second = (int(hh) * 3600) + (int(mm) * 60) + float(sms)
+                self._processed_bytes = int(re_search(r'\d+', progress['size']).group()) * 1024
+                self._percentage = f'{round((time_to_second / self._duration) * 100, 2)}%'
+                try:
+                    self._eta = (self._duration / float(progress['speed'].strip('x'))) - (time() - start_time)
+                except:
+                    pass
+class Watermark(FFProgress):
+    def __init__(self, listener):
+        self.listener = listener
+        self.path = ''
+        self.name = ''
+        self.size = 0
+        self._start_time = time()
+        super().__init__()
+    async def add_watermark(self, media_file: str, wm_position: str, wm_size: str):
+        self.path = media_file
+        self.size = await get_path_size(media_file)
+        base_file, _ = ospath.splitext(media_file)
+        self.outfile = f'{base_file}_.mkv'
+        self.name = ospath.basename(self.outfile)
+        cmd = [bot_cache['pkgs'][2], '-hide_banner', '-y', '-i', media_file, '-i', f'wm/{self.listener.user_id}.png', '-filter_complex',
+            f"[1][0]scale2ref=w='iw*{wm_size}/100':h='ow/mdar'[wm][vid];[vid][wm]overlay={wm_position}",
+            '-crf', '28', '-preset', 'ultrafast', '-map', '0:a:?', '-map', '0:s:?', '-c:a', 'copy', '-c:s', 'copy', self.outfile]
+        self.listener.suproc = await create_subprocess_exec(*cmd, stderr=PIPE)
+        _, code = await gather(self.progress(), self.listener.suproc.wait())
+        if code == 0:
+            await clean_target(media_file)
+            self.listener.seed = False
+            return self.outfile
+        if code == -9:
+            self.suproc = 'cancelled'
+            return False
+        await clean_target(self.outfile)
+        LOGGER.error('%s. Watermarking failed, Path %s', (await self.listener.suproc.stderr.read()).decode(), media_file)
+        return False

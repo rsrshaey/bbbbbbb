@@ -3,9 +3,10 @@ from datetime import datetime
 from pyrogram.handlers import MessageHandler, CallbackQueryHandler
 from pyrogram.filters import command, regex, create
 from aiofiles import open as aiopen
-from aiofiles.os import remove as aioremove, path as aiopath, mkdir
+from aiofiles.os import remove as aioremove, path as aiopath, makedirs
 from langcodes import Language
 from os import path as ospath, getcwd
+from re import I
 from PIL import Image
 from time import time
 from functools import partial
@@ -26,28 +27,34 @@ from bot.helper.mirror_utils.upload_utils.ddlserver.gofile import Gofile
 from bot.helper.themes import BotTheme
 
 handler_dict = {}
-desp_dict = {'rcc': ['RClone is a command-line program to sync files and directories to and from different cloud storage providers like GDrive, OneDrive...', 'Send rclone.conf. \n<b>Timeout:</b> 60 sec'],
-            'lprefix': ['Leech Filename Prefix is the Front Part attacted with the Filename of the Leech Files.', 'Send Leech Filename Prefix. Documentation Here : <a href="https://t.me/WZML_X/77">Click Me</a> \n<b>Timeout:</b> 60 sec'],
-            'lsuffix': ['Leech Filename Suffix is the End Part attached with the Filename of the Leech Files', 'Send Leech Filename Suffix. Documentation Here : <a href="https://t.me/WZML_X/77">Click Me</a> \n<b>Timeout:</b> 60 sec'],
-            'lremname': ['Leech Filename Remname is combination of Regex(s) used for removing or manipulating Filename of the Leech Files', 'Send Leech Filename Remname. Documentation Here : <a href="https://t.me/WZML_X/77">Click Me</a> \n<b>Timeout:</b> 60 sec'],
-            'lcaption': ['Leech Caption is the Custom Caption on the Leech Files Uploaded by the bot', 'Send Leech Caption. You can add HTML tags. Documentation Here : <a href="https://t.me/WZML_X/77">Click Me</a> \n<b>Timeout:</b> 60 sec'],
-            'ldump': ['Leech Files User Dump for Personal Use as a Storage.', 'Send Leech Dump Channel ID\n➲ <b>Format:</b> \ntitle chat_id/@username\ntitle2 chat_id2/@username2. \n\n<b>NOTE:</b>Make Bot Admin in the Channel else it will not accept\n<b>Timeout:</b> 60 sec'],
-            'mprefix': ['Mirror Filename Prefix is the Front Part attacted with the Filename of the Mirrored/Cloned Files.', 'Send Mirror Filename Prefix. \n<b>Timeout:</b> 60 sec'],
-            'msuffix': ['Mirror Filename Suffix is the End Part attached with the Filename of the Mirrored/Cloned Files', 'Send Mirror Filename Suffix. \n<b>Timeout:</b> 60 sec'],
-            'mremname': ['Mirror Filename Remname is combination of Regex(s) used for removing or manipulating Filename of the Mirrored/Cloned Files', 'Send Mirror Filename Remname. \n<b>Timeout:</b> 60 sec'],
-            'thumb': ['Custom Thumbnail to appear on the Leeched files uploaded by the bot', 'Send a photo to save it as custom thumbnail. \n<b>Alternatively: </b><code>/cmd [photo] -s thumb</code> \n<b>Timeout:</b> 60 sec'],
-            'yt_opt': ['YT-DLP Options is the Custom Quality for the extraction of videos from the yt-dlp supported sites.', 'Send YT-DLP Options. Timeout: 60 sec\nFormat: key:value|key:value|key:value.\nExample: format:bv*+mergeall[vcodec=none]|nocheckcertificate:True\nCheck all yt-dlp api options from this <a href="https://github.com/yt-dlp/yt-dlp/blob/master/yt_dlp/YoutubeDL.py#L184">FILE</a> to convert cli arguments to api options.'],
-            'usess': [f'User Session is Telegram Session used to Download Private Contents from Private Channels with no compromise in Privacy, Build with Encryption.\n{"<b>Warning:</b> This Bot is not secured. We recommend asking the group owner to set the Upstream repo to the Official repo. If it is not the official repo, then WZML-X is not responsible for any issues that may occur in your account." if config_dict["UPSTREAM_REPO"] != "https://github.com/weebzone/WZML-X" else "Bot is Secure. You can use the session securely."}', 'Send your Session String.\n<b>Timeout:</b> 60 sec'],
-            'split_size': ['Leech Splits Size is the size to split the Leeched File before uploading', f'Send Leech split size in any comfortable size, like 2Gb, 500MB or 1.46gB. \n<b>PREMIUM ACTIVE:</b> {IS_PREMIUM_USER}. \n<b>Timeout:</b> 60 sec'],
-            'ddl_servers': ['DDL Servers which uploads your File to their Specific Hosting', ''],
-            'user_tds': [f'UserTD helps to Upload files via Bot to your Custom Drive Destination via Global SA mail\n\n➲ <b>SA Mail :</b> {"Not Specified" if "USER_TD_SA" not in config_dict else config_dict["USER_TD_SA"]}', 'Send User TD details for Use while Mirror/Clone\n➲ <b>Format:</b>\nname id/link index(optional)\nname2 link2/id2 index(optional)\n\n<b>NOTE:</b>\n<i>1. Drive ID must be valid, then only it will accept\n2. Names can have spaces\n3. All UserTDs are updated on every change\n4. To delete specific UserTD, give Name(s) separated by each line</i>\n\n<b>Timeout:</b> 60 sec'],
-            'gofile': ['Gofile is a free file sharing and storage platform. You can store and share your content without any limit.', "Send GoFile's API Key. Get it on https://gofile.io/myProfile, It will not be Accepted if the API Key is Invalid !!\n<b>Timeout:</b> 60 sec"],
-            'streamtape': ['Streamtape is free Video Streaming & sharing Hoster', "Send StreamTape's Login and Key\n<b>Format:</b> <code>user_login:pass_key</code>\n<b>Timeout:</b> 60 sec"],
+desp_dict = {'rcc': ['<blockquote>RClone is a command-line program to sync files and directories to and from different cloud storage providers like GDrive, OneDrive...', 'Send rclone.conf. \n<b>Timeout:</b> 60 sec</blockquote>'],
+            'lprefix': ['<blockquote>Leech Filename Prefix is the Front Part attacted with the Filename of the Leech Files.', 'Send Leech Filename Prefix. Documentation Here : <a href="https://telegra.ph/BMLDDocs-09-12">Click Me</a> \n<b>Timeout:</b> 60 sec</blockquote>'],
+            'lsuffix': ['<blockquote>Leech Filename Suffix is the End Part attached with the Filename of the Leech Files', 'Send Leech Filename Suffix. Documentation Here : <a href="https://telegra.ph/BMLDDocs-09-12">Click Me</a> \n<b>Timeout:</b> 60 sec</blockquote>'],
+            'lremname': ['<blockquote>Leech Filename Remname is combination of Regex(s) used for removing or manipulating Filename of the Leech Files', 'Send Leech Filename Remname. Documentation Here : <a href="https://telegra.ph/BMLDDocs-09-12">Click Me</a> \n<b>Timeout:</b> 60 sec</blockquote>'],
+            'lcaption': ['<blockquote>Leech Caption is the Custom Caption on the Leech Files Uploaded by the bot', 'Send Leech Caption. You can add HTML tags. Documentation Here : <a href="https://telegra.ph/BMLDDocs-09-12">Click Me</a> \n<b>Timeout:</b> 60 sec</blockquote>'],
+            'ldump': ['<blockquote>Leech Files User Dump for Personal Use as a Storage.', 'Send Leech Dump Channel ID\n➲ <b>Format:</b> \ntitle chat_id/@username\ntitle2 chat_id2/@username2. \n\n<b>NOTE:</b>Make Bot Admin in the Channel else it will not accept\n<b>Timeout:</b> 60 sec</blockquote>'],
+            'mprefix': ['<blockquote>Mirror Filename Prefix is the Front Part attacted with the Filename of the Mirrored/Cloned Files.', 'Send Mirror Filename Prefix. \n<b>Timeout:</b> 60 sec</blockquote>'],
+            'msuffix': ['<blockquote>Mirror Filename Suffix is the End Part attached with the Filename of the Mirrored/Cloned Files', 'Send Mirror Filename Suffix. \n<b>Timeout:</b> 60 sec</blockquote>'],
+            'mremname': ['<blockquote>Mirror Filename Remname is combination of Regex(s) used for removing or manipulating Filename of the Mirrored/Cloned Files', 'Send Mirror Filename Remname. \n<b>Timeout:</b> 60 sec</blockquote>'],
+            'thumb': ['<blockquote>Custom Thumbnail to appear on the Leeched files uploaded by the bot', 'Send a photo to save it as custom thumbnail. \n<b>Alternatively: </b><code>/cmd [photo] -s thumb</code> \n<b>Timeout:</b> 60 sec</blockquote>'],
+            'yt_opt': ['<blockquote>YT-DLP Options is the Custom Quality for the extraction of videos from the yt-dlp supported sites.', 'Send YT-DLP Options. Timeout: 60 sec\nFormat: key:value|key:value|key:value.\nExample: format:bv*+mergeall[vcodec=none]|nocheckcertificate:True\nCheck all yt-dlp api options from this <a href="https://github.com/yt-dlp/yt-dlp/blob/master/yt_dlp/YoutubeDL.py#L184">FILE</a> to convert cli arguments to api options.</blockquote>'],
+            'usess': [f'<blockquote>User Session is Telegram Session used to Download Private Contents from Private Channels with no compromise in Privacy, Build with Encryption.\n{"<b>Warning:</b> This Bot is not secured. We recommend asking the group owner to set the Upstream repo to the Official repo. If it is not the official repo, then BLM is not responsible for any issues that may occur in your account." if config_dict["UPSTREAM_REPO"] != "https://envs.sh/cwz.jpg" else "Bot is Secure. You can use the session securely."}', 'Send your Session String.\n<b>Timeout:</b> 60 sec</blockquote>'],
+            'split_size': ['<blockquote>Leech Splits Size is the size to split the Leeched File before uploading', f'Send Leech split size in any comfortable size, like 2Gb, 500MB or 1.46gB. \n<b>PREMIUM ACTIVE:</b> {IS_PREMIUM_USER}. \n<b>Timeout:</b> 60 sec</blockquote>'],
+            'ddl_servers': ['<blockquote>DDL Servers which uploads your File to their Specific Hosting</blockquote>', ''],
+            'user_tds': [f'<blockquote>UserTD helps to Upload files via Bot to your Custom Drive Destination via Global SA mail\n\n➲ <b>SA Mail :</b> {"Not Specified" if "USER_TD_SA" not in config_dict else config_dict["USER_TD_SA"]}', 'Send User TD details for Use while Mirror/Clone\n➲ <b>Format:</b>\nname id/link index(optional)\nname2 link2/id2 index(optional)\n\n<b>NOTE:</b>\n<i>1. Drive ID must be valid, then only it will accept\n2. Names can have spaces\n3. All UserTDs are updated on every change\n4. To delete specific UserTD, give Name(s) separated by each line</i>\n\n<b>Timeout:</b> 60 sec</blockquote>'],
+            'gofile': ['<blockquote>Gofile is a free file sharing and storage platform. You can store and share your content without any limit.', "Send GoFile's API Key. Get it on https://gofile.io/myProfile, It will not be Accepted if the API Key is Invalid !!\n<b>Timeout:</b> 60 sec</blockquote>"],
+            'streamtape': ['<blockquote>Streamtape is free Video Streaming & sharing Hoster', "Send StreamTape's Login and Key\n<b>Format:</b> <code>user_login:pass_key</code>\n<b>Timeout:</b> 60 sec</blockquote>"],
+            'lmeta': ['<blockquote>Your channel name that will be used while editing metadata of the video (mkv) file', 'Send Metadata Text For Leeching Files.</blockquote>'],
+            'lattach': ['<blockquote>Your channel thumbnail that will be used while adding attachment of the video (mkv) file', 'Send Image Url For Leeching Files.</blockquote>'],
+            'watermark': ['<blockquote>Add watermark to the video.', 'Send image waermark. \n<b>Timeout:</b> 60 sec</blockquote>'],
             }
 fname_dict = {'rcc': 'RClone',
              'lprefix': 'Prefix',
              'lsuffix': 'Suffix',
              'lremname': 'Remname',
+             'lmeta': 'Metadata',
+             'lattach': 'Attachment',
+             'watermark': 'Watermark',
              'mprefix': 'Prefix',
              'msuffix': 'Suffix',
              'mremname': 'Remname',
@@ -68,8 +75,10 @@ async def get_user_settings(from_user, key=None, edit_type=None, edit_mode=None)
     name = from_user.mention(style="html")
     buttons = ButtonMaker()
     thumbpath = f"Thumbnails/{user_id}.jpg"
-    rclone_path = f'rclone/{user_id}.conf'
+    rclone_path = f'wcl/{user_id}.conf'
+    wm_path = f'wm/{user_id}.png'
     user_dict = user_data.get(user_id, {})
+    text = button = set_exist = image = ''
     if key is None:
         buttons.ibutton("Universal Settings", f"userset {user_id} universal")
         buttons.ibutton("Mirror Settings", f"userset {user_id} mirror")
@@ -117,23 +126,23 @@ async def get_user_settings(from_user, key=None, edit_type=None, edit_mode=None)
 
         buttons.ibutton("Mirror Suffix", f"userset {user_id} msuffix")
         msuffix = 'Not Exists' if (val:=user_dict.get('msuffix', config_dict.get('MIRROR_FILENAME_SUFFIX', ''))) == '' else val
-            
+
         buttons.ibutton("Mirror Remname", f"userset {user_id} mremname")
         mremname = 'Not Exists' if (val:=user_dict.get('mremname', config_dict.get('MIRROR_FILENAME_REMNAME', ''))) == '' else val
 
         ddl_serv = len(val) if (val := user_dict.get('ddl_servers', False)) else 0
         buttons.ibutton("DDL Servers", f"userset {user_id} ddl_servers")
-        
+
         tds_mode = "Enabled" if user_dict.get('td_mode', False) else "Disabled"
         if not config_dict['USER_TD_MODE']:
             tds_mode = "Force Disabled"
-        
+
         user_tds = len(val) if (val := user_dict.get('user_tds', False)) else 0
         buttons.ibutton("User TDs", f"userset {user_id} user_tds")
 
         text = BotTheme('MIRROR', NAME=name, RCLONE=rccmsg, DDL_SERVER=ddl_serv, DM=f"{dailyup} / {dailytlup}", MREMNAME=escape(mremname), MPREFIX=escape(mprefix),
                 MSUFFIX=escape(msuffix), TMODE=tds_mode, USERTD=user_tds)
-        
+
         buttons.ibutton("Back", f"userset {user_id} back", "footer")
         buttons.ibutton("Close", f"userset {user_id} close", "footer")
         button = buttons.build_menu(2)
@@ -168,6 +177,15 @@ async def get_user_settings(from_user, key=None, edit_type=None, edit_mode=None)
         lremname = 'Not Exists' if (val:=user_dict.get('lremname', config_dict.get('LEECH_FILENAME_REMNAME', ''))) == '' else val
         buttons.ibutton(f"{'✅️' if lremname != 'Not Exists' else ''} Leech Remname", f"userset {user_id} lremname")
 
+        lmeta = 'Not Exists' if (val:=user_dict.get('lmeta', config_dict.get('METADATA', ''))) == '' else val
+        buttons.ibutton(f"{'✅️' if lmeta != 'Not Exists' else ''} Metadata Text", f"userset {user_id} lmeta")
+
+        lattach = 'Not Exists' if (val:=user_dict.get('lattach', config_dict.get('ATTACHMENT_URL', ''))) == '' else val
+        buttons.ibutton(f"{'✅️' if lattach != 'Not Exists' else ''} Attachment Url", f"userset {user_id} lattach")
+
+        watermark = 'Enable' if await aiopath.exists(wm_path) else 'Not Exists'
+        buttons.ibutton(f"{'✅' if watermark != 'Not Exists' else ''} Leech Watermark", f"userset {user_id} watermark")
+
         buttons.ibutton("Leech Dump", f"userset {user_id} ldump")
         ldump = 'Not Exists' if (val:=user_dict.get('ldump', '')) == '' else len(val)
 
@@ -175,7 +193,8 @@ async def get_user_settings(from_user, key=None, edit_type=None, edit_mode=None)
                 LTYPE=ltype, THUMB=thumbmsg, SPLIT_SIZE=split_size,
                 EQUAL_SPLIT=equal_splits, MEDIA_GROUP=media_group,
                 LCAPTION=escape(lcaption), LPREFIX=escape(lprefix),
-                LSUFFIX=escape(lsuffix), LDUMP=ldump, LREMNAME=escape(lremname))
+                LSUFFIX=escape(lsuffix), LDUMP=ldump, LREMNAME=escape(lremname),
+                LMETA=escape(lmeta), LATTACH=escape(lattach), WATERMARK=escape(watermark))
 
         buttons.ibutton("Back", f"userset {user_id} back", "footer")
         buttons.ibutton("Close", f"userset {user_id} close", "footer")
@@ -195,6 +214,45 @@ async def get_user_settings(from_user, key=None, edit_type=None, edit_mode=None)
         buttons.ibutton("Back", f"userset {user_id} back mirror", "footer")
         buttons.ibutton("Close", f"userset {user_id} close", "footer")
         button = buttons.build_menu(2)
+
+    elif key == 'wmposition':
+        image = wm_path
+        text = f"㊂ Select Position for WatermarkL:"
+        pos_dict = {'5:5': 'Top Left',
+                    '(main_w-overlay_w)/2:5': 'Top Center',
+                    'main_w-overlay_w-5:5': 'Top Right',
+                    '(main_w-overlay_w)/2:(main_h-overlay_h)/2': 'Center',
+                    '5:main_h-overlay_h': 'Bottom Left',
+                    '(main_w-overlay_w)/2:main_h-overlay_h-5': 'Bottom Center',
+                    'main_w-overlay_w-5:main_h-overlay_h-5': 'Bottom Right'}
+        possitions = [('Top Left', 'tl'),
+                      ('Top Center', 'tc'),
+                      ('Top Right', 'tr'),
+                      ('Center', 'ct'),
+                      ('Bottom Left', 'bl'),
+                      ('Bottom Center', 'bc'),
+                      ('Bottom Right', 'br')]
+        wm_possition = pos_dict.get(user_dict.get('wmposition', 'None'))
+        for bkey, bdata in possitions:
+            if bkey.startswith('Top'):
+                button_possition = 'header'
+            elif bkey.startswith('Bottom'):
+                button_possition = 'footer'
+            else:
+                button_possition = None
+            buttons.ibutton(f'{bkey}{" ✅" if wm_possition == bkey else ""}', f'userset {user_id} wmposition {bdata}', button_possition)
+        buttons.ibutton("Back", f"userset {user_id} wmback", "footer")
+        buttons.ibutton("Close", f"userset {user_id} close", "footer")
+        button = buttons.build_menu(1, 3, f_cols=3)
+    elif key == 'wmsize':
+        image = wm_path
+        text = f"㊂ Select Size for WatermarkL:"
+        wmsize = user_dict.get('wmsize')
+        [buttons.ibutton(f'{wnum}{" ✅" if wmsize == str(wnum) else ""}', f'userset {user_id} wmsize {wnum}') for wnum in [5, 10, 15, 20, 25, 30, 40, 50]]
+        buttons.ibutton("Back", f"userset {user_id} wmback", "footer")
+        buttons.ibutton("Close", f"userset {user_id} close", "footer")
+        button = buttons.build_menu(4)
+                
     elif edit_type:
         text = f"㊂ <b><u>{fname_dict[key]} Settings :</u></b>\n\n"
         if key == 'rcc':
@@ -203,6 +261,19 @@ async def get_user_settings(from_user, key=None, edit_type=None, edit_mode=None)
         elif key == 'thumb':
             set_exist = await aiopath.exists(thumbpath)
             text += f"➲ <b>Custom Thumbnail :</b> <i>{'' if set_exist else 'Not'} Exists</i>\n\n"
+        elif key == 'watermark':
+            image = wm_path
+            pos_dict = {'5:5': 'Top Left',
+                        '(main_w-overlay_w)/2:5': 'Top Center',
+                        'main_w-overlay_w-5:5': 'Top Right',
+                        '(main_w-overlay_w)/2:(main_h-overlay_h)/2': 'Center',
+                        '5:main_h-overlay_h': 'Bottom Left',
+                        '(main_w-overlay_w)/2:main_h-overlay_h-5': 'Bottom Center',
+                        'main_w-overlay_w-5:main_h-overlay_h-5': 'Bottom Right'}
+            set_exist = await aiopath.exists(wm_path)
+            text += f"➲ <b>Watermark :</b> <i>{'' if set_exist else 'Not'} Exists</i>\n\n"
+            text += f"➲ <b>WM Position :</b> <i>{pos_dict.get(user_dict.get('wmposition', 'None')) or '~'}</i>\n\n"
+            text += f"➲ <b>WM Size :</b> <i>{user_dict.get('wmsize') or '~'}</i>\n\n"
         elif key == 'yt_opt':
             set_exist = 'Not Exists' if (val:=user_dict.get('yt_opt', config_dict.get('YT_DLP_OPTIONS', ''))) == '' else val
             text += f"➲ <b>YT-DLP Options :</b> <code>{escape(set_exist)}</code>\n\n"
@@ -220,12 +291,12 @@ async def get_user_settings(from_user, key=None, edit_type=None, edit_mode=None)
                 buttons.ibutton("Disable Media Group", f"userset {user_id} mgroup", "header")
             else:
                 buttons.ibutton("Enable Media Group", f"userset {user_id} mgroup", "header")
-        elif key in ['lprefix', 'lremname', 'lsuffix', 'lcaption', 'ldump']:
+        elif key in ['lprefix', 'lremname', 'lsuffix', 'lcaption', 'ldump', 'lmeta', 'lattach']:
             set_exist = 'Not Exists' if (val:=user_dict.get(key, config_dict.get(f'LEECH_FILENAME_{key[1:].upper()}', ''))) == '' else val
             if set_exist != 'Not Exists' and key == "ldump":
                 set_exist = '\n\n' + '\n'.join([f"{index}. <b>{dump}</b> : <code>{ids}</code>" for index, (dump, ids) in enumerate(val.items(), start=1)])
             text += f"➲ <b>Leech Filename {fname_dict[key]} :</b> {set_exist}\n\n"
-        elif key in ['mprefix', 'mremname', 'msuffix']:
+        elif key in ['mprefix', 'mremname', 'msuffix', 'lmeta', 'lattach']:
             set_exist = 'Not Exists' if (val:=user_dict.get(key, config_dict.get(f'MIRROR_FILENAME_{key[1:].upper()}', ''))) == '' else val
             text += f"➲ <b>Mirror Filename {fname_dict[key]} :</b> {set_exist}\n\n"
         elif key in ['gofile', 'streamtape']:
@@ -253,28 +324,43 @@ async def get_user_settings(from_user, key=None, edit_type=None, edit_mode=None)
         if set_exist and set_exist != 'Not Exists' and (set_exist != get_readable_file_size(config_dict['LEECH_SPLIT_SIZE']) + ' (Default)'):
             if key == 'thumb':
                 buttons.ibutton("View Thumbnail", f"userset {user_id} vthumb", "header")
+            elif key == 'watermark':
+                buttons.ibutton("View Watermark", f"userset {user_id} vwatermark", "header")
             elif key == 'user_tds':
                 buttons.ibutton('Show UserTDs', f"userset {user_id} show_tds", "header")
             buttons.ibutton("↻ Delete", f"userset {user_id} d{key}")
+        if key == 'watermark' and set_exist:
+                buttons.ibutton("WM Position", f"userset {user_id} wmp")
+                buttons.ibutton("WM Size", f"userset {user_id} wms")
         buttons.ibutton("Back", f"userset {user_id} back {edit_type}", "footer")
         buttons.ibutton("Close", f"userset {user_id} close", "footer")
         button = buttons.build_menu(2)
-    return text, button
+    return text, button, image
 
 
 async def update_user_settings(query, key=None, edit_type=None, edit_mode=None, msg=None, sdirect=False):
-    msg, button = await get_user_settings(msg.from_user if sdirect else query.from_user, key, edit_type, edit_mode)
-    await editMessage(query if sdirect else query.message, msg, button)
+    user = msg.from_user if sdirect else query.from_user
+    msg, button, image = await get_user_settings(user, key, edit_type, edit_mode)
+    thumbpath = f"Thumbnails/{user.id}.jpg"
+    if image and await aiopath.exists(image):
+        photo = image
+    elif await aiopath.exists(thumbpath):
+        photo = thumbpath
+    else:
+        photo = 'thumb.jpg'
+    await editMessage(query if sdirect else query.message, msg, button, photo)
 
 
 async def user_settings(client, message):
+    thumbpath = f"Thumbnails/{message.from_user.id}.jpg"
+    photo = thumbpath if await aiopath.exists(thumbpath) else 'thumb.jpg'
     if len(message.command) > 1 and (message.command[1] == '-s' or message.command[1] == '-set'):
         set_arg = message.command[2].strip() if len(message.command) > 2 else None
-        msg = await sendMessage(message, '<i>Fetching Settings...</i>', photo='IMAGES')
+        msg = await sendMessage(message, '<i>Fetching Settings...</i>', photo)
         if set_arg and (reply_to := message.reply_to_message):
             if message.from_user.id != reply_to.from_user.id:
                 return await editMessage(msg, '<i>Reply to Your Own Message for Setting via Args Directly</i>')
-            if set_arg in ['lprefix', 'lsuffix', 'lremname', 'lcaption', 'ldump', 'yt_opt'] and reply_to.text:
+            if set_arg in ['lprefix', 'lsuffix', 'lremname', 'lcaption', 'ldump', 'yt_opt', 'lmeta', 'lattach'] and reply_to.text:
                 return await set_custom(client, reply_to, msg, set_arg, True)
             elif set_arg == 'thumb' and reply_to.media:
                 return await set_thumb(client, reply_to, msg, set_arg, True)
@@ -289,6 +375,10 @@ async def user_settings(client, message):
     /cmd -s lsuffix
 ➲ <b>Leech Filename Remname :</b>
     /cmd -s lremname
+➲ <b>Leech Metadata Text :</b>
+    /cmd -s lmeta
+➲ <b>Leech Attachment Url :</b>
+    /cmd -s lattach
 ➲ <b>Leech Filename Caption :</b>
     /cmd -s lcaption
 ➲ <b>YT-DLP Options :</b>
@@ -298,8 +388,8 @@ async def user_settings(client, message):
     else:
         from_user = message.from_user
         handler_dict[from_user.id] = False
-        msg, button = await get_user_settings(from_user)
-        await sendMessage(message, msg, button, 'IMAGES')
+        msg, button, _ = await get_user_settings(from_user)
+        await sendMessage(message, msg, button, photo)
 
 
 async def set_custom(client, message, pre_event, key, direct=False):
@@ -372,8 +462,7 @@ async def set_thumb(client, message, pre_event, key, direct=False):
     user_id = message.from_user.id
     handler_dict[user_id] = False
     path = "Thumbnails/"
-    if not await aiopath.isdir(path):
-        await mkdir(path)
+    await makedirs(path, exist_ok=True)
     photo_dir = await message.download()
     des_dir = ospath.join(path, f'{user_id}.jpg')
     await sync_to_async(Image.open(photo_dir).convert("RGB").save, des_dir, "JPEG")
@@ -384,16 +473,30 @@ async def set_thumb(client, message, pre_event, key, direct=False):
     if DATABASE_URL:
         await DbManger().update_user_doc(user_id, 'thumb', des_dir)
 
+async def set_watermark(client, message, pre_event, key, direct=False):
+    user_id = message.from_user.id
+    handler_dict[user_id] = False
+    path = "wm/"
+    await makedirs(path, exist_ok=True)
+    photo_dir = await message.download()
+    des_dir = ospath.join(path, f'{user_id}.png')
+    await sync_to_async(Image.open(photo_dir).convert("RGBA").save, des_dir, "png")
+    await aioremove(photo_dir)
+    update_user_ldata(user_id, 'watermark', des_dir)
+    await deleteMessage(message)
+    await update_user_settings(pre_event, key, 'leech', msg=message, sdirect=direct)
+    if DATABASE_URL:
+        await DbManger().update_user_doc(user_id, 'watermark', des_dir)
+
 
 async def add_rclone(client, message, pre_event):
     user_id = message.from_user.id
     handler_dict[user_id] = False
-    path = f'{getcwd()}/rclone/'
-    if not await aiopath.isdir(path):
-        await mkdir(path)
+    path = f'{getcwd()}/wcl/'
+    await makedirs(path, exist_ok=True)
     des_dir = ospath.join(path, f'{user_id}.conf')
     await message.download(file_name=des_dir)
-    update_user_ldata(user_id, 'rclone', f'rclone/{user_id}.conf')
+    update_user_ldata(user_id, 'rclone', f'wcl/{user_id}.conf')
     await deleteMessage(message)
     await update_user_settings(pre_event, 'rcc', 'mirror')
     if DATABASE_URL:
@@ -422,7 +525,9 @@ async def event_handler(client, query, pfunc, rfunc, photo=False, document=False
     start_time = time()
 
     async def event_filter(_, __, event):
-        if photo:
+        if photo and document:
+            mtype = event.photo or event.document
+        elif photo:
             mtype = event.photo
         elif document:
             mtype = event.document
@@ -448,7 +553,8 @@ async def edit_user_settings(client, query):
     message = query.message
     data = query.data.split()
     thumb_path = f'Thumbnails/{user_id}.jpg'
-    rclone_path = f'rclone/{user_id}.conf'
+    rclone_path = f'wcl/{user_id}.conf'
+    wm_path = f'wm/{user_id}.png'
     user_dict = user_data.get(user_id, {})
     if user_id != int(data[1]):
         await query.answer("Not Yours!", show_alert=True)
@@ -461,13 +567,13 @@ async def edit_user_settings(client, query):
         await update_user_settings(query, 'leech')
         if DATABASE_URL:
             await DbManger().update_user_data(user_id)
-    elif data[2] == 'vthumb':
+    elif data[2] in ['vthumb', 'vwatermark']:
         handler_dict[user_id] = False
         await query.answer()
         buttons = ButtonMaker()
         buttons.ibutton('Cʟᴏsᴇ', f'wzmlx {user_id} close')
-        await sendMessage(message, from_user.mention, buttons.build_menu(1), thumb_path)
-        await update_user_settings(query, 'thumb', 'leech')
+        await sendMessage(message, from_user.mention, buttons.build_menu(1), thumb_path if data[2] == 'vthumb' else wm_path)
+        await update_user_settings(query, data[2][1:], 'leech')
     elif data[2] == 'show_tds':
         handler_dict[user_id] = False
         user_tds = user_dict.get('user_tds', {})
@@ -482,26 +588,54 @@ async def edit_user_settings(client, query):
         except Exception:
             await query.answer('Start the Bot in PM (Private) and Try Again', show_alert=True)
         await update_user_settings(query, 'user_tds', 'mirror')
-    elif data[2] == "dthumb":
+    elif data[2] in ['dthumb', 'dwatermark']:
         handler_dict[user_id] = False
-        if await aiopath.exists(thumb_path):
+        file_path = thumb_path if data[2] == 'dthumb' else wm_path
+        if await aiopath.exists(file_path):
+            data_key = data[2][1:]
             await query.answer()
-            await aioremove(thumb_path)
-            update_user_ldata(user_id, 'thumb', '')
-            await update_user_settings(query, 'thumb', 'leech')
+            await aioremove(file_path)
+            update_user_ldata(user_id, data_key, '')
+            await update_user_settings(query, data_key, 'leech')
             if DATABASE_URL:
-                await DbManger().update_user_doc(user_id, 'thumb')
+                await DbManger().update_user_doc(user_id, data_key)
         else:
             await query.answer("Old Settings", show_alert=True)
             await update_user_settings(query, 'leech')
-    elif data[2] == 'thumb':
+    elif data[2] == 'wmback':
+        await query.answer()
+        await update_user_settings(query, 'watermark', 'leech')
+    elif data[2] in ['wmp',  'wms']:
+        await query.answer()
+        await update_user_settings(query, 'wmposition' if data[2] == 'wmp' else 'wmsize')
+    elif data[2] == 'wmposition':
+        await query.answer()
+        pos_dict = {'tl': '5:5',
+                    'tc': '(main_w-overlay_w)/2:5',
+                    'tr': 'main_w-overlay_w-5:5',
+                    'ct': '(main_w-overlay_w)/2:(main_h-overlay_h)/2',
+                    'bl': '5:main_h-overlay_h',
+                    'bc': '(main_w-overlay_w)/2:main_h-overlay_h-5',
+                    'br': 'main_w-overlay_w-5:main_h-overlay_h-5'}
+        update_user_ldata(user_id, 'wmposition', pos_dict[data[3]])
+        if DATABASE_URL:
+            await DbManger().update_user_data(user_id)
+        await update_user_settings(query, 'wmposition')
+    elif data[2] == 'wmsize':
+        await query.answer()
+        update_user_ldata(user_id, 'wmsize', data[3])
+        if DATABASE_URL:
+            await DbManger().update_user_data(user_id)
+        await update_user_settings(query, 'wmsize')
+    elif data[2] in ['thumb',  'watermark']:
         await query.answer()
         edit_mode = len(data) == 4
         await update_user_settings(query, data[2], 'leech', edit_mode)
         if not edit_mode: return
-        pfunc = partial(set_thumb, pre_event=query, key=data[2])
+        func, is_doc = (set_thumb, False) if data[2] == 'thumb' else (set_watermark, True)
+        pfunc = partial(func, pre_event=query, key=data[2])
         rfunc = partial(update_user_settings, query, data[2], 'leech')
-        await event_handler(client, query, pfunc, rfunc, True)
+        await event_handler(client, query, pfunc, rfunc, True, is_doc)
     elif data[2] in ['yt_opt', 'usess']:
         await query.answer()
         edit_mode = len(data) == 4
@@ -608,24 +742,24 @@ async def edit_user_settings(client, query):
         pfunc = partial(set_custom, pre_event=query, key=data[2])
         rfunc = partial(update_user_settings, query, data[2], 'mirror' if data[2] in ['ddl_servers', 'user_tds'] else "ddl_servers")
         await event_handler(client, query, pfunc, rfunc)
-    elif data[2] in ['lprefix', 'lsuffix', 'lremname', 'lcaption', 'ldump', 'mprefix', 'msuffix', 'mremname']:
+    elif data[2] in ['lprefix', 'lsuffix', 'lremname', 'lcaption', 'ldump', 'mprefix', 'msuffix', 'mremname', 'lmeta', 'lattach']:
         handler_dict[user_id] = False
         await query.answer()
         edit_mode = len(data) == 4
-        return_key = 'leech' if data[2][0] == 'l' else 'mirror'
+        return_key = 'leech' if data[2][0] == 'l' or data[2] in ['lmeta', 'lattach'] else 'mirror'
         await update_user_settings(query, data[2], return_key, edit_mode)
         if not edit_mode: return
         pfunc = partial(set_custom, pre_event=query, key=data[2])
         rfunc = partial(update_user_settings, query, data[2], return_key)
         await event_handler(client, query, pfunc, rfunc)
-    elif data[2] in ['dlprefix', 'dlsuffix', 'dlremname', 'dlcaption', 'dldump']:
+    elif data[2] in ['dlprefix', 'dlsuffix', 'dlremname', 'dlcaption', 'dldump', 'dlmeta', 'dlattach']:
         handler_dict[user_id] = False
         await query.answer()
         update_user_ldata(user_id, data[2][1:], {} if data[2] == 'dldump' else '')
         await update_user_settings(query, data[2][1:], 'leech')
         if DATABASE_URL:
             await DbManger().update_user_data(user_id)
-    elif data[2] in ['dmprefix', 'dmsuffix', 'dmremname', 'duser_tds']:
+    elif data[2] in ['dmprefix', 'dmsuffix', 'dmremname', 'duser_tds', 'dlmeta', 'dlattach']:
         handler_dict[user_id] = False
         await query.answer()
         update_user_ldata(user_id, data[2][1:], {} if data[2] == 'duser_tds' else '')
@@ -653,6 +787,8 @@ async def edit_user_settings(client, query):
             return await update_user_settings(query)
         if await aiopath.exists(thumb_path):
             await aioremove(thumb_path)
+        if await aiopath.exists(wm_path):
+            await aioremove(wm_path)
         if await aiopath.exists(rclone_path):
             await aioremove(rclone_path)
         await query.answer()
@@ -666,7 +802,7 @@ async def edit_user_settings(client, query):
         user_id = int(data[3])
         await query.answer()
         thumb_path = f'Thumbnails/{user_id}.jpg'
-        rclone_path = f'rclone/{user_id}.conf'
+        rclone_path = f'wcl/{user_id}.conf'
         if await aiopath.exists(thumb_path):
             await aioremove(thumb_path)
         if await aiopath.exists(rclone_path):
@@ -675,6 +811,7 @@ async def edit_user_settings(client, query):
         if DATABASE_URL:
             await DbManger().update_user_data(user_id)
             await DbManger().update_user_doc(user_id, 'thumb')
+            await DbManger().update_user_doc(user_id, 'watermark')
             await DbManger().update_user_doc(user_id, 'rclone')
         await editMessage(message, f'Data Reset for {user_id}')
     else:

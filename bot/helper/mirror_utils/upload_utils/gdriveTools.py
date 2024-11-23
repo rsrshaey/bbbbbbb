@@ -15,7 +15,7 @@ from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_excep
 
 from bot import OWNER_ID, config_dict, list_drives_dict, GLOBAL_EXTENSION_FILTER
 from bot.helper.ext_utils.bot_utils import setInterval, async_to_sync, get_readable_file_size, fetch_user_tds
-from bot.helper.ext_utils.fs_utils import get_mime_type
+from bot.helper.ext_utils.fs_utils import get_mime_type, add_attachment
 from bot.helper.ext_utils.leech_utils import format_filename
 
 LOGGER = getLogger(__name__)
@@ -317,7 +317,10 @@ class GoogleDriveHelper:
     @retry(wait=wait_exponential(multiplier=2, min=3, max=6), stop=stop_after_attempt(3),
            retry=(retry_if_exception_type(Exception)))
     def __upload_file(self, file_path, file_name, mime_type, dest_id, is_dir=True):
-        file_name, _ = async_to_sync(format_filename, file_name, self.__user_id, isMirror=True)
+        location = ospath.dirname(file_path)
+        file_name, _ = async_to_sync(format_filename, file_name, self.__user_id, location, True)
+        if (atc:=self.__listener.attachment) :
+            file_name = async_to_sync(add_attachment, file_name, location, atc)
         # File body description
         file_metadata = {
             'name': file_name,

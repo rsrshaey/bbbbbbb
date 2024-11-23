@@ -5,7 +5,7 @@ from logging import getLogger
 from yt_dlp import YoutubeDL, DownloadError
 from re import search as re_search
 
-from bot import download_dict_lock, download_dict, non_queued_dl, queue_dict_lock
+from bot import download_dict_lock, download_dict, non_queued_dl, queue_dict_lock, bot_cache
 from bot.helper.telegram_helper.message_utils import sendStatusMessage
 from ..status_utils.yt_dlp_download_status import YtDlpDownloadStatus
 from bot.helper.mirror_utils.status_utils.queue_status import QueueStatus
@@ -66,6 +66,7 @@ class YoutubeDLHelper:
                      'overwrites': True,
                      'writethumbnail': True,
                      'trim_file_name': 220,
+                     'ffmpeg_location': f"/bin/{bot_cache['pkgs'][2]}",
                      'retry_sleep_functions': {'http': lambda n: 3,
                                                'fragment': lambda n: 3,
                                                'file_access': lambda n: 3,
@@ -195,16 +196,14 @@ class YoutubeDLHelper:
         self.__gid = token_hex(5)
         await self.__onDownloadStart()
 
-        self.opts['postprocessors'] = [
-            {'add_chapters': True, 'add_infojson': 'if_exists', 'add_metadata': True, 'key': 'FFmpegMetadata'}]
+        self.opts['postprocessors'] = [{'add_chapters': True, 'add_infojson': 'if_exists', 'add_metadata': True, 'key': 'FFmpegMetadata'}]
 
         if qual.startswith('ba/b-'):
             audio_info = qual.split('-')
             qual = audio_info[0]
             audio_format = audio_info[1]
             rate = audio_info[2]
-            self.opts['postprocessors'].append(
-                {'key': 'FFmpegExtractAudio', 'preferredcodec': audio_format, 'preferredquality': rate})
+            self.opts['postprocessors'].append({'key': 'FFmpegExtractAudio', 'preferredcodec': audio_format, 'preferredquality': rate})
             if audio_format == 'vorbis':
                 self.__ext = '.ogg'
             elif audio_format == 'alac':
@@ -224,8 +223,7 @@ class YoutubeDLHelper:
         base_name, ext = ospath.splitext(self.name)
         trim_name = self.name if self.is_playlist else base_name
         if len(trim_name.encode()) > 200:
-            self.name = self.name[:
-                                  200] if self.is_playlist else f'{base_name[:200]}{ext}'
+            self.name = self.name[:200] if self.is_playlist else f'{base_name[:200]}{ext}'
             base_name = ospath.splitext(self.name)[0]
 
         if self.is_playlist:

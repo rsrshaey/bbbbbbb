@@ -42,10 +42,10 @@ default_values = {'AUTO_DELETE_MESSAGE_DURATION': 30,
                   'BOT_THEME': 'minimal',
                   'BOT_LANG': 'en',
                   'IMG_PAGE': 1,
-                  'AUTHOR_NAME': 'WZML-X',
-                  'AUTHOR_URL': 'https://t.me/WZML_X',
-                  'TITLE_NAME': 'WZ Mirror/Leech X',
-                  'GD_INFO': 'Uploaded by WZML-X',
+                  'AUTHOR_NAME': 'BLM',
+                  'AUTHOR_URL': 'https://t.me/aboutRizzx',
+                  'TITLE_NAME': 'Bhartiyee Leech',
+                  'GD_INFO': 'Uploaded by Bhartiyee Leech',
                   }
 bool_vars = ['AS_DOCUMENT', 'BOT_PM', 'STOP_DUPLICATE', 'SET_COMMANDS', 'SAVE_MSG', 'SHOW_MEDIAINFO', 'SOURCE_LINK', 'SAFE_MODE', 'SHOW_EXTRA_CMDS',
              'IS_TEAM_DRIVE', 'USE_SERVICE_ACCOUNTS', 'WEB_PINCODE', 'EQUAL_SPLITS', 'DISABLE_DRIVE_LINK', 'DELETE_LINKS', 'CLEAN_LOG_MSG', 'USER_TD_MODE', 
@@ -450,7 +450,7 @@ async def load_config():
 
     TITLE_NAME = environ.get('TITLE_NAME', '')
     if len(TITLE_NAME) == 0:
-        TITLE_NAME = 'WeebZone-X'
+        TITLE_NAME = 'Bhartiyee Leech'
         
     COVER_IMAGE = environ.get('COVER_IMAGE', '')
     if len(COVER_IMAGE) == 0:
@@ -458,7 +458,7 @@ async def load_config():
 
     GD_INFO = environ.get('GD_INFO', '')
     if len(GD_INFO) == 0:
-        GD_INFO = 'Uploaded by WZML-X'
+        GD_INFO = 'Uploaded by Bhartiyee Leech'
 
     SAVE_MSG = environ.get('SAVE_MSG', '')
     SAVE_MSG = SAVE_MSG.lower() == 'true'
@@ -491,7 +491,7 @@ async def load_config():
 
     DEF_IMDB_TEMP  = environ.get('IMDB_TEMPLATE', '')
     if len(DEF_IMDB_TEMP) == 0:
-        DEF_IMDB_TEMP = '''<b>Title: </b> {title} [{year}]
+        DEF_IMDB_TEMP = '''<blockquote expandable><b>Title: </b> {title} [{year}]
 <b>Also Known As:</b> {aka}
 <b>Rating ⭐️:</b> <i>{rating}</i>
 <b>Release Info: </b> <a href="{url_releaseinfo}">{release_date}</a>
@@ -502,11 +502,11 @@ async def load_config():
 
 <b>Story Line: </b><code>{plot}</code>
 
-<a href="{url_cast}">Read More ...</a>'''
+<a href="{url_cast}">Read More ...</a><blockquote>'''
 
     DEF_ANI_TEMP  = environ.get('ANIME_TEMPLATE', '')
     if len(DEF_ANI_TEMP) == 0:
-        DEF_ANI_TEMP = '''<b>{ro_title}</b>({na_title})
+        DEF_ANI_TEMP = '''<blockquote expandable><b>{ro_title}</b>({na_title})
 <b>Format</b>: <code>{format}</code>
 <b>Status</b>: <code>{status}</code>
 <b>Start Date</b>: <code>{startdate}</code>
@@ -520,11 +520,11 @@ async def load_config():
 <b>Hashtag</b>: {hashtag}
 <b>Studios</b>: {studios}
 
-<b>Description</b>: <i>{description}</i>'''
+<b>Description</b>: <i>{description}</i><blockquote>'''
 
     MDL_TEMPLATE = environ.get('MDL_TEMPLATE', '')
     if len(MDL_TEMPLATE) == 0:
-        MDL_TEMPLATE = '''<b>Title:</b> {title}
+        MDL_TEMPLATE = '''<blockquote expandable><b>Title:</b> {title}
 <b>Also Known As:</b> {aka}
 <b>Rating ⭐️:</b> <i>{rating}</i>
 <b>Release Info:</b> {aired_date}
@@ -535,7 +535,7 @@ async def load_config():
 
 <b>Story Line:</b> {synopsis}
 
-<a href='{url}'>Read More ...</a>'''
+<a href='{url}'>Read More ...</a><blockquote>'''
     
     TIMEZONE = environ.get('TIMEZONE', '')
     if len(TIMEZONE) == 0:
@@ -755,7 +755,7 @@ async def get_buttons(key=None, edit_type=None, edit_mode=None, mess=None):
         for x in range(0, len(qbit_options)-1, 10):
             buttons.ibutton(
                 f'{int(x/10)+1}', f"botset start qbit {x}", position='footer')
-        msg = f'Qbittorrent Options | Page: {int(START/10)+1} | State: {STATE}'
+            msg = f'Qbittorrent Options | Page: {int(START/10)+1} | State: {STATE}'
     elif edit_type == 'editvar':
         msg = f'<b>Variable:</b> <code>{key}</code>\n\n'
         msg += f'<b>Description:</b> {default_desp.get(key, "No Description Provided")}\n\n'
@@ -804,7 +804,6 @@ async def get_buttons(key=None, edit_type=None, edit_mode=None, mess=None):
 async def update_buttons(message, key=None, edit_type=None, edit_mode=None):
     msg, button = await get_buttons(key, edit_type, edit_mode, message)
     await editMessage(message, msg, button)
-
 
 async def edit_variable(_, message, pre_message, key):
     handler_dict[message.chat.id] = False
@@ -1029,7 +1028,7 @@ async def update_private_file(_, message, pre_message):
             await sendMessage(message, msg, buttons.build_menu(2))
         else:
             await deleteMessage(message)
-    if file_name == 'rclone.conf':
+    if file_name == 'wcl.conf':
         await rclone_serve_booter()
     await update_buttons(pre_message)
     if DATABASE_URL:

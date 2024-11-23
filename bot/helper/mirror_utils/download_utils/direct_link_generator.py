@@ -208,7 +208,7 @@ def real_debrid(url: str, tor=False):
                 return resp.json()['download']
         else:
             raise DirectDownloadLinkException(f"ERROR: {resp.json()['error']}")
-            
+
     def __addMagnet(magnet):
         cget = create_scraper().request
         hash_ = search(r'(?<=xt=urn:btih:)[a-zA-Z0-9]+', magnet).group(0)
@@ -224,7 +224,7 @@ def real_debrid(url: str, tor=False):
             _file = cget('POST', f"https://api.real-debrid.com/rest/1.0/torrents/selectFiles/{_id}?auth_token={config_dict['REAL_DEBRID_API']}", data={'files': 'all'})
             if _file.status_code != 204:
                 raise DirectDownloadLinkException(f"ERROR: {resp.json()['error']}")
-            
+
         contents = {'links': []}
         while len(contents['links']) == 0:
             _res = cget('GET', f"https://api.real-debrid.com/rest/1.0/torrents/info/{_id}?auth_token={config_dict['REAL_DEBRID_API']}")
@@ -233,7 +233,7 @@ def real_debrid(url: str, tor=False):
             else:
                 raise DirectDownloadLinkException(f"ERROR: {_res.json()['error']}")
             sleep(0.5)
-        
+
         details = {'contents': [], 'title': contents['original_filename'], 'total_size': contents['bytes']}
 
         for file_info, link in zip(contents['files'], contents['links']):
@@ -245,7 +245,6 @@ def real_debrid(url: str, tor=False):
             }
             details['contents'].append(item)
         return details
-    
     try:
         if tor:
             details = __addMagnet(url)
